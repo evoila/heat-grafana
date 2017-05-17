@@ -1,0 +1,185 @@
+heat_template_version: 2015-04-30
+description: Installs Grafana
+
+parameters:
+
+  server_map:
+    type: json
+    description: Map of servers to be used with OS::Heat::SoftwareDeploymentGroup
+
+  server_list:
+    type: comma_delimited_list
+    description: List of server IDs
+
+  http_proxy:
+    type: string
+    description: "HTTP proxy URL"
+    default: ''
+
+  https_proxy:
+    type: string
+    description: "HTTPS proxy URL"
+    default: ''
+
+  no_proxy:
+    type: string
+    description: "Exceptions to proxy configuration"
+    default: ''
+
+  external_fqdn:
+    type: string
+
+  root_url:
+    type: string
+    default: '%(protocol)s://%(http_attr)s:%(http_port)s'
+
+  database_address:
+    type: string
+
+  database_port:
+    type: number
+    default: 3306
+
+  database_name:
+    type: string
+    default: grafana
+
+  database_user:
+    type: string
+
+  database_password:
+    type: string
+    hidden: true
+
+  prometheus_address:
+    type: string
+
+  elasticsearch_address:
+    type: string
+
+  memcached_addresses:
+    type: comma_delimited_list
+
+  memcached_port:
+    type: number
+    default: 11211
+
+resources:
+
+  # SOFTWARE CONFIGS
+
+  install_grafana:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: { get_file: scripts/ubuntu/1_install.sh }
+      inputs:
+        - name: VERSION
+          description: Kibana version
+
+  configure_grafana:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: { get_file: scripts/ubuntu/2_configure.sh }
+      inputs:
+        - name: EXTERNAL_FQDN
+        - name: SECRET_KEY
+        - name: ADMIN_PASSWORD
+        - name: DATABASE_USER
+        - name: DATABASE_PASSWORD
+        - name: DATABASE_ADDRESS
+        - name: DATABASE_PORT
+        - name: DATABASE_NAME
+        - name: MEMCACHED_ADDRESSES
+          type: CommaDelimitedList
+        - name: MEMCACHED_PORT
+
+  bootstrap:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: { get_file: scripts/ubuntu/3_bootstrap.sh }
+      inputs:
+        - name: ADMIN_PASSWORD
+        - name: PROMETHEUS_ADDR
+        - name: ELASTICSEARCH_ADDR
+
+  start:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: { get_file: scripts/ubuntu/4_start.sh }
+
+
+  # SOFTWARE DEPLOYMENTS
+
+  deploy_install_grafana:
+    type: OS::Heat::SoftwareDeploymentGroup
+    properties:
+      config: { get_resource: install_grafana }
+      servers: { get_param: server_map }
+      signal_transport: HEAT_SIGNAL
+      input_values:
+        http_proxy: { get_param: http_proxy }
+        https_proxy: { get_param: https_proxy }
+        no_proxy: { get_param: no_proxy }
+        VERSION: 4.2.0
+
+  admin_password:
+    type: OS::Heat::RandomString
+
+  secret_key:
+    type: OS::Heat::RandomString
+
+  deploy_configure_grafana:
+    type: OS::Heat::SoftwareDeploymentGroup
+    properties:
+      config: { get_resource: configure_grafana }
+      servers: { get_param: server_map }
+      signal_transport: HEAT_SIGNAL
+      input_values:
+        http_proxy: { get_param: http_proxy }
+        https_proxy: { get_param: https_proxy }
+        no_proxy: { get_param: no_proxy }
+        EXTERNAL_FQDN: { get_param: external_fqdn }
+        SECRET_KEY: { get_resource: secret_key }
+        ADMIN_PASSWORD: { get_resource: admin_password }
+        DATABASE_USER: { get_param: database_user }
+        DATABASE_PASSWORD: { get_param: database_password }
+        DATABASE_ADDRESS: { get_param: database_address }
+        DATABASE_PORT: { get_param: database_port }
+        DATABASE_NAME: { get_param: database_name }
+        DOMAIN: { get_param: external_fqdn }
+        ROOT_URL: { get_param: root_url }
+        MEMCACHED_ADDRESSES: { get_param: memcached_addresses }
+        MEMCACHED_PORT: { get_param: memcached_port }
+    depends_on:
+      - deploy_install_grafana
+
+  deploy_bootstrap:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config: { get_resource: bootstrap }
+      server: { get_param: [ server_list, 0 ] }
+      signal_transport: HEAT_SIGNAL
+      input_values:
+        ADMIN_PASSWORD: { get_resource: admin_password }
+        PROMETHEUS_ADDR: { get_param: prometheus_address }
+        ELASTICSEARCH_ADDR: { get_param: elasticsearch_address }
+    depends_on:
+      - deploy_configure_grafana 
+
+  deploy_start:
+    type: OS::Heat::SoftwareDeploymentGroup
+    properties:
+      config: { get_resource: start }
+      servers: { get_param: server_map }
+      signal_transport: HEAT_SIGNAL
+    depends_on:
+      - deploy_bootstrap
+
+outputs:
+
+  admin_password:
+    value: { get_resource: admin_password }

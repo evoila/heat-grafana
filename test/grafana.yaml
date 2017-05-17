@@ -1,0 +1,131 @@
+heat_template_version: 2015-10-15
+
+parameter_groups:
+
+parameters:
+
+  key:
+    type: string
+    constraints:
+      - custom_constraint: nova.keypair
+
+  image:
+    type: string
+    constraints:
+      - custom_constraint: glance.image
+
+  flavor:
+    type: string
+    constraints:
+      - custom_constraint: nova.flavor
+
+  public_network:
+    type: string
+    constraints:
+      - custom_constraint: neutron.network
+
+  dns_nameservers:
+    type: comma_delimited_list
+    description: List of DNS servers
+    default:
+      - 8.8.8.8
+
+  name:
+    type: string
+    default: grafana
+
+resources:
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      name: { get_param: name }
+      external_gateway_info:
+        network: { get_param: public_network }
+
+  simple_networking1:
+    type: Evoila::IaaS::NetworkLayout::Simple
+    properties:
+      name: { get_param: name }
+      network_cidr: 192.168.0.0/24
+      router: { get_resource: router }
+      dns_nameservers: { get_param: dns_nameservers }
+
+  security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: { get_param: name }
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+
+  cluster:
+    type: Evoila::IaaS::Cluster::Basic
+    properties:
+      count: 3
+      signals: 3
+      name: { get_param: name }
+      key: { get_param: key }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      security_groups:
+        - { get_resource: security_group }
+      subnets:
+        - { get_attr: [simple_networking1, subnet] }
+      timeout: 500
+      extras:
+        volume_count: 0
+        volume_size: 0
+
+  hosts_file:
+    type: Evoila::Deployment::HostsFile
+    properties:
+      server_map: { get_attr: [ cluster, attributes_id ] }
+      server_addresses: { get_attr: [ cluster, first_addresses ] }
+      server_names: { get_attr: [ cluster, names ] }
+
+  galera:
+    type: Evoila::Deployment::Galera
+    properties:
+      server_map: { get_attr: [ cluster, attributes_id ] }
+      server_list: { get_attr: [ cluster, ids ] }
+      server_names: { get_attr: [ cluster, names ] }
+      server_addresses: { get_attr: [ cluster, first_addresses ] }
+    depends_on:
+      - hosts_file
+
+  create_database:
+    type: Evoila::Deployment::Galera::CreateDatabase
+    properties:
+      server: { get_attr: [ cluster, ids, 0 ] }
+      root_password:  { get_attr: [ galera, root_password ] }
+      name: grafanadb
+      username: grafanauser
+    depends_on:
+      - galera
+
+  grafana:
+    type: Evoila::Deployment::Grafana
+    properties:
+      server_map: { get_attr: [ cluster, attributes_id ] }
+      server_list: { get_attr: [ cluster, ids ] }
+      external_fqdn: localhost
+      database_address: 127.0.0.1
+      database_name: grafanadb
+      database_user: grafanauser
+      database_password: { get_attr: [ create_database, password ] }
+      prometheus_address: 127.0.0.1
+      elasticsearch_address: 127.0.0.1
+      memcached_addresses:
+        - 127.0.0.1
+        - 127.0.0.2
+      memcached_port: 11211
+    depends_on:
+      - create_database
+
+outputs:
+
+  admin_password:
+    value: { get_attr: [ grafana, admin_password ] }
+
+  db_root_password:
+    value: { get_attr: [ galera, root_password ] }
