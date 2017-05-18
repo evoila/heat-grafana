@@ -31,7 +31,7 @@ parameters:
 
   root_url:
     type: string
-    default: '%(protocol)s://%(http_attr)s:%(http_port)s'
+    default: '%(protocol)s://%(http_addr)s:%(http_port)s'
 
   database_address:
     type: string
