@@ -103,6 +103,11 @@ resources:
     depends_on:
       - galera
 
+  memcached:
+    type: Evoila::Deployment::Memcached
+    properties:
+      server_map: { get_attr: [ cluster, attributes_id ] }
+
   grafana:
     type: Evoila::Deployment::Grafana
     properties:
@@ -121,6 +126,7 @@ resources:
       memcached_port: 11211
     depends_on:
       - create_database
+      - memcached
 
 outputs:
 

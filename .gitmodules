@@ -7,3 +7,6 @@
 [submodule "test/lib/heat-galera"]
 	path = test/lib/heat-galera
 	url = git@github.com:evoila/heat-galera.git
+[submodule "test/lib/heat-memcached"]
+	path = test/lib/heat-memcached
+	url = git@github.com:evoila/heat-memcached.git

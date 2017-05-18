@@ -1,0 +1,2 @@
+resource_registry:
+  "Evoila::Deployment::Grafana": src/deploy-grafana-centos.yaml
