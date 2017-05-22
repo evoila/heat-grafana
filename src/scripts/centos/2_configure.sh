@@ -18,12 +18,12 @@ MEMCACHED_PORT=${MEMCACHED_PORT:-11211}
 
 
 # Prepare memcached connection string
-LENGTH=$(echo ${MEMCACHED_ADDRESSES} | /usr/bin/jq 'length')
+LENGTH=$(echo ${MEMCACHED_ADDRESSES} | jq 'length')
 LAST_INDEX=$((LENGTH-1))
 
 MEMCACHED_CONN=''
 for I in `seq 0 $LAST_INDEX`; do
-  ADDR=$(echo $MEMCACHED_ADDRESSES | /usr/bin/jq -r ".[$I]" )
+  ADDR=$(echo $MEMCACHED_ADDRESSES | jq -r ".[$I]" )
   MEMCACHED_CONN="${MEMCACHED_CONN};$ADDR:$MEMCACHED_PORT"
 done
 
