@@ -16,6 +16,7 @@ DATABASE_NAME=${DATABASE_NAME:-grafana}
 MEMCACHED_ADDRESSES=${MEMCACHED_ADDRESSES}
 MEMCACHED_PORT=${MEMCACHED_PORT:-11211}
 
+HOSTNAME=$(hostname -s)
 
 # Prepare memcached connection string
 LENGTH=$(echo ${MEMCACHED_ADDRESSES} | jq 'length')
